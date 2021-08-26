@@ -1,12 +1,14 @@
 import React from 'react';
-import {StyleSheet, Text, View, Button, Alert} from 'react-native';
+import {StyleSheet, Text, View, Button, TextInput} from 'react-native';
 
-import {TextInput} from 'react-native-paper';
-
-import Greeting, {abi, byteCode} from './Greeting';
-import User, {userABI, userByteCode} from './User';
-import web3, {account, nonce, pk} from './web3client';
-const Tx = require('ethereumjs-tx').Transaction;
+import {
+  getDeployedContract,
+  getGreeting,
+  setGreeting,
+  deployGreetingSmartContract,
+} from './Greeting';
+import {deployUserSmartContract, signDocument, getUser} from './User';
+import web3, {pk} from './web3client';
 
 export default class App extends React.Component {
   constructor() {
@@ -14,6 +16,9 @@ export default class App extends React.Component {
     this.state = {
       latestBlock: {},
       greeting: null,
+      hello: '',
+      greetingAddress: '0x074bF216979389dE24F0684feC80790a8c2D2508',
+      userAddress: '0x0893C3937aCc139643Fe3641c27A59a312897a04',
     };
   }
 
@@ -22,154 +27,40 @@ export default class App extends React.Component {
       console.log(latestBlock);
       this.setState({latestBlock});
     });
+    const Greeting = getDeployedContract(this.state.greetingAddress);
     const greeting = await Greeting.methods.getGreeting().call();
     console.log(greeting);
     this.setState({greeting: greeting});
   }
 
-  sendSignedTransaction = async (address, data, private_key) => {
-    const {address: from} = web3.eth.accounts.privateKeyToAccount(pk);
-    const transaction = {
-      to: address,
-      from,
-      gas: 80000,
-      nonce: await web3.eth.getTransactionCount(from, 'latest'),
-      data: data,
-    };
-
-    const signedTx = await web3.eth.accounts.signTransaction(
-      transaction,
-      private_key,
-    );
-    web3.eth
-      .sendSignedTransaction(signedTx.rawTransaction, function (error, hash) {
-        if (!error) {
-          console.log(
-            '🎉 The hash of your transaction is: ',
-            hash,
-            '\n Check to view the status of your transaction!',
-          );
-        } else {
-          console.log(
-            '❗Something went wrong while submitting your transaction:',
-            error,
-          );
-        }
-      })
-      .catch(error => {
-        console.log(' ' + error);
-      });
-  };
-
   handleGetClick = async () => {
-    const greeting = await Greeting.methods.getGreeting().call();
+    const greeting = await getGreeting(this.state.greetingAddress);
+    this.setState({greeting: greeting});
     alert(greeting);
   };
 
   handleSetClick = async () => {
-    const {address: from} = web3.eth.accounts.privateKeyToAccount(pk);
-    let bytecodeWithEncodedParameters = await Greeting.methods
-      .setGreeting('မင်္ဂလာပါ')
-      .encodeABI();
-    const nonce = await web3.eth.getTransactionCount(from);
-    const gasPrice = await web3.eth.getGasPrice();
-    const gasLimit = await web3.eth.estimateGas({
-      data: bytecodeWithEncodedParameters,
-    });
-    console.log(gasLimit);
-
-    const txObject = {
-      to: Greeting._address,
-      nonce: web3.utils.toHex(nonce),
-      gasLimit: web3.utils.toHex(gasLimit),
-      gasPrice: web3.utils.toHex(gasPrice),
-      data: `${bytecodeWithEncodedParameters}`,
-      chainId: 2018,
-    };
-
-    const signedTx = await web3.eth.accounts.signTransaction(txObject, pk);
-
-    const txReceipt = await web3.eth.sendSignedTransaction(
-      signedTx.rawTransaction,
-    );
-
-    console.log('Transaction Hash:', txReceipt.transactionHash);
+    console.log('Set Click');
+    await setGreeting(this.state.greetingAddress, this.state.hello, pk);
+    this.setState({hello: ''});
   };
 
-  handleDeployClick = async () => {
-    const {address: from} = web3.eth.accounts.privateKeyToAccount(pk);
-    const account = '0xAB330c8C4C40E07C2C8Af12490bb09D2d669e90b';
-    let contract = new web3.eth.Contract(abi);
-    // deploy contract with constructor value
-    console.log('here');
-    const bytecodeWithEncodedParameters = contract
-      .deploy({
-        data: byteCode,
-        arguments: ['Hello'],
-      })
-      .encodeABI();
-    console.log('Deploying...');
-
-    const nonce = await web3.eth.getTransactionCount(from);
-    const gasPrice = await web3.eth.getGasPrice();
-    const gasLimit = await web3.eth.estimateGas({
-      data: bytecodeWithEncodedParameters,
-    });
-    console.log(gasLimit);
-
-    const txObject = {
-      nonce: web3.utils.toHex(nonce),
-      gasLimit: web3.utils.toHex(gasLimit),
-      gasPrice: web3.utils.toHex(gasPrice),
-      data: `${bytecodeWithEncodedParameters}`,
-      chainId: 2018,
-    };
-
-    const signedTx = await web3.eth.accounts.signTransaction(txObject, pk);
-
-    const txReceipt = await web3.eth.sendSignedTransaction(
-      signedTx.rawTransaction,
-    );
-    console.log('Contract Address:', txReceipt.contractAddress);
-    console.log('Transaction Hash:', txReceipt.transactionHash);
+  handleGreetingDeployClick = async () => {
+    const result = await deployGreetingSmartContract(pk);
+    this.setState({greetingAddress: result.contractAddress});
+    alert('Contract Address ' + result.contractAddress);
   };
 
   handleUserDeployClick = async () => {
-    const {address: from} = web3.eth.accounts.privateKeyToAccount(pk);
-    const account = '0xAB330c8C4C40E07C2C8Af12490bb09D2d669e90b';
-    let contract = new web3.eth.Contract(userABI);
-    // deploy contract with constructor value
-    console.log('here');
-    const bytecodeWithEncodedParameters = contract
-      .deploy({
-        data: userByteCode,
-        arguments: ['Kyaw', 'Kyaw', 'KK', 'signature'],
-      })
-      .encodeABI();
-    console.log('Deploying...');
+    const result = await deployUserSmartContract(pk);
+    this.setState({userAddress: result.contractAddress});
+    alert('Contract Address ' + result.contractAddress);
+  };
 
-    const nonce = await web3.eth.getTransactionCount(from);
-    const gasPrice = await web3.eth.getGasPrice();
-    const gasLimit = await web3.eth.estimateGas({
-      data: bytecodeWithEncodedParameters,
-    });
-    console.log(gasLimit);
-
-    const txObject = {
-      nonce: web3.utils.toHex(nonce),
-      gasLimit: web3.utils.toHex(gasLimit),
-      gasPrice: web3.utils.toHex(gasPrice),
-      data: `${bytecodeWithEncodedParameters}`,
-      chainId: 2018,
-    };
-
-    const signedTx = await web3.eth.accounts.signTransaction(txObject, pk);
-
-    const txReceipt = await web3.eth.sendSignedTransaction(
-      signedTx.rawTransaction,
-    );
-    console.log('Contract Address:', txReceipt.contractAddress);
-    console.log('Transaction Hash:', txReceipt.transactionHash);
+  handleSignDocumentClick = async () => {
+    console.log('Sign User');
+    await signDocument(this.state.userAddress, pk);
+    await getUser(this.state.userAddress);
   };
 
   render() {
@@ -185,13 +76,22 @@ export default class App extends React.Component {
           <Text>You should find extra info on the latest ethereum block.</Text>
         </View>
         <View>
+          <Button
+            title="Deploy Greeting"
+            onPress={this.handleGreetingDeployClick}
+          />
+          <Text></Text>
+          <TextInput
+            onChangeText={hello => this.setState({hello})}
+            value={this.state.hello}
+          />
+          <Button title="Set Hi" onPress={this.handleSetClick} />
+          <Text></Text>
+          <Button title="Say Hi" onPress={this.handleGetClick} />
+          <Text></Text>
           <Button title="Deploy User" onPress={this.handleUserDeployClick} />
           <Text></Text>
-          <Button title="Deploy Greeting" onPress={this.handleDeployClick} />
-          <Text></Text>
-          <Button title="Say Hi" onPress={this.handleSetClick} />
-          <Text></Text>
-          <Button title="Hi" onPress={this.handleGetClick} />
+          <Button title="Sign Doc" onPress={this.handleSignDocumentClick} />
         </View>
       </View>
     );
