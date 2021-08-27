@@ -1,4 +1,4 @@
-import web3 from './web3client';
+import web3 from '../web3client';
 
 const contractAddress = '0xdD56E578c079532A04D879391596ac95751D7FBC';
 
@@ -209,11 +209,17 @@ const signDocument = async (userAddress, pk) => {
 
   const signedTx = await web3.eth.accounts.signTransaction(txObject, pk);
 
-  const txReceipt = await web3.eth.sendSignedTransaction(
-    signedTx.rawTransaction,
-  );
+  const txReceipt = await web3.eth
+    .sendSignedTransaction(signedTx.rawTransaction)
+    .on('receipt', receipt => {
+      console.log(receipt.events);
+    })
+    .catch(error => {
+      console.log(error);
+    });
 
   console.log('Transaction Hash:', txReceipt.transactionHash);
+  return txReceipt;
 };
 
 export {userABI, userByteCode};

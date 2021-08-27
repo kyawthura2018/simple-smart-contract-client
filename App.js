@@ -1,14 +1,16 @@
 import React from 'react';
 import {StyleSheet, Text, View, Button, TextInput} from 'react-native';
+import {Colors} from 'react-native/Libraries/NewAppScreen';
 
 import {
   getDeployedContract,
   getGreeting,
   setGreeting,
   deployGreetingSmartContract,
-} from './Greeting';
-import {deployUserSmartContract, signDocument, getUser} from './User';
+} from './contracts/Greeting';
+import {deployUserSmartContract, signDocument, getUser} from './contracts/User';
 import web3, {pk} from './web3client';
+const getRevertReason = require('eth-revert-reason');
 
 export default class App extends React.Component {
   constructor() {
@@ -17,12 +19,12 @@ export default class App extends React.Component {
       latestBlock: {},
       greeting: null,
       hello: '',
-      greetingAddress: '0x074bF216979389dE24F0684feC80790a8c2D2508',
+      greetingAddress: '0x68D02D2d5e05A6E514fd557991fF821d0dC77a2C',
       userAddress: '0x0893C3937aCc139643Fe3641c27A59a312897a04',
     };
   }
 
-  async componentWillMount() {
+  async componentDidMount() {
     await web3.eth.getBlock('latest').then(latestBlock => {
       console.log(latestBlock);
       this.setState({latestBlock});
@@ -41,7 +43,14 @@ export default class App extends React.Component {
 
   handleSetClick = async () => {
     console.log('Set Click');
-    await setGreeting(this.state.greetingAddress, this.state.hello, pk);
+    const result = await setGreeting(
+      this.state.greetingAddress,
+      this.state.hello,
+      pk,
+    );
+    if (result && !result.status) {
+      console.log(await getRevertReason(result.transactionHash));
+    }
     this.setState({hello: ''});
   };
 
@@ -59,8 +68,10 @@ export default class App extends React.Component {
 
   handleSignDocumentClick = async () => {
     console.log('Sign User');
-    await signDocument(this.state.userAddress, pk);
-    await getUser(this.state.userAddress);
+    const result = await signDocument(this.state.userAddress, pk);
+    if (result) {
+      await getUser(this.state.userAddress);
+    }
   };
 
   render() {
@@ -75,24 +86,25 @@ export default class App extends React.Component {
           <Text>Check your console!</Text>
           <Text>You should find extra info on the latest ethereum block.</Text>
         </View>
-        <View>
-          <Button
-            title="Deploy Greeting"
-            onPress={this.handleGreetingDeployClick}
-          />
-          <Text></Text>
-          <TextInput
-            onChangeText={hello => this.setState({hello})}
-            value={this.state.hello}
-          />
-          <Button title="Set Hi" onPress={this.handleSetClick} />
-          <Text></Text>
-          <Button title="Say Hi" onPress={this.handleGetClick} />
-          <Text></Text>
-          <Button title="Deploy User" onPress={this.handleUserDeployClick} />
-          <Text></Text>
-          <Button title="Sign Doc" onPress={this.handleSignDocumentClick} />
-        </View>
+        <Text></Text>
+        <Button
+          title="Deploy Greeting"
+          onPress={this.handleGreetingDeployClick}
+        />
+        <Text></Text>
+        <TextInput
+          style={styles.textInput}
+          autoFocus
+          onChangeText={hello => this.setState({hello})}
+          value={this.state.hello}
+        />
+        <Button title="Set Hi" onPress={this.handleSetClick} />
+        <Text></Text>
+        <Button title="Say Hi" onPress={this.handleGetClick} />
+        <Text></Text>
+        <Button title="Deploy User" onPress={this.handleUserDeployClick} />
+        <Text></Text>
+        <Button title="Sign Doc" onPress={this.handleSignDocumentClick} />
       </View>
     );
   }
@@ -105,5 +117,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     margin: 20,
+  },
+  textInput: {
+    borderColor: 'gray',
+    borderWidth: 0.5,
+    borderRadius: 30,
+    marginBottom: 8,
+    paddingStart: 15,
+    paddingRight: 15,
+    width: 300,
   },
 });

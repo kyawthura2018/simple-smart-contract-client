@@ -1,4 +1,4 @@
-import web3 from './web3client';
+import web3 from '../web3client';
 
 const contractAddress = '0xdD56E578c079532A04D879391596ac95751D7FBC';
 
@@ -50,6 +50,22 @@ const abi = [
   },
 ];
 
+async function getRevertReason(txHash) {
+  const tx = await web3.eth.getTransaction(txHash);
+
+  var result = await web3.eth.call(tx, tx.blockNumber);
+
+  result = result.startsWith('0x') ? result : `0x${result}`;
+
+  if (result && result.substr(138)) {
+    const reason = web3.utils.toAscii(result.substr(138));
+    console.log('Revert reason:', reason);
+    return reason;
+  } else {
+    console.log('Cannot get reason - No return value');
+  }
+}
+
 const getDeployedContract = contractAddress => {
   return new web3.eth.Contract(abi, contractAddress);
 };
@@ -61,38 +77,46 @@ const getGreeting = async greetingAddress => {
 };
 
 const setGreeting = async (greetingAddress, greeting, pk) => {
-  const {address: from} = web3.eth.accounts.privateKeyToAccount(pk);
-  console.log('Greeting Contract Address ' + greetingAddress);
-  const Greeting = getDeployedContract(greetingAddress);
-  let bytecodeWithEncodedParameters = await Greeting.methods
-    .setGreeting(greeting)
-    .encodeABI();
-  const nonce = await web3.eth.getTransactionCount(from);
-  const gasPrice = await web3.eth.getGasPrice();
-  const gasLimit = await web3.eth.estimateGas({
-    data: bytecodeWithEncodedParameters,
-  });
-  console.log('Gas Limit is ' + gasLimit);
+  try {
+    const {address: from} = web3.eth.accounts.privateKeyToAccount(pk);
+    console.log('Greeting Contract Address ' + greetingAddress);
+    const Greeting = getDeployedContract(greetingAddress);
+    let bytecodeWithEncodedParameters = await Greeting.methods
+      .setGreeting(greeting)
+      .encodeABI();
+    const nonce = await web3.eth.getTransactionCount(from);
+    const gasPrice = await web3.eth.getGasPrice();
+    const gasLimit = await web3.eth.estimateGas({
+      data: bytecodeWithEncodedParameters,
+    });
+    console.log('Gas Limit is ' + gasLimit);
 
-  const txObject = {
-    to: greetingAddress,
-    nonce: web3.utils.toHex(nonce),
-    gasLimit: web3.utils.toHex(gasLimit),
-    gasPrice: web3.utils.toHex(gasPrice),
-    data: `${bytecodeWithEncodedParameters}`,
-    chainId: 2018,
-  };
+    const txObject = {
+      to: greetingAddress,
+      nonce: web3.utils.toHex(nonce),
+      gasLimit: web3.utils.toHex(gasLimit),
+      gasPrice: web3.utils.toHex(gasPrice),
+      data: `${bytecodeWithEncodedParameters}`,
+      chainId: 2018,
+    };
 
-  const signedTx = await web3.eth.accounts.signTransaction(txObject, pk);
+    const signedTx = await web3.eth.accounts.signTransaction(txObject, pk);
 
-  const txReceipt = await web3.eth.sendSignedTransaction(
-    signedTx.rawTransaction,
-  );
+    const txReceipt = await web3.eth.sendSignedTransaction(
+      signedTx.rawTransaction,
+    );
 
-  console.log('Transaction Hash:', txReceipt.transactionHash);
+    console.log('Transaction Hash:', txReceipt.transactionHash);
+    return txReceipt;
+  } catch (error) {
+    let errJson = JSON.stringify(error);
+    let err = JSON.parse(errJson);
+    console.log(err.receipt.transactionHash);
+    return null;
+  }
 };
 
-const deployGreetingSmartContract = async (pk) => {
+const deployGreetingSmartContract = async pk => {
   const {address: from} = web3.eth.accounts.privateKeyToAccount(pk);
   let contract = new web3.eth.Contract(abi);
   // deploy contract with constructor value
@@ -100,7 +124,7 @@ const deployGreetingSmartContract = async (pk) => {
   const bytecodeWithEncodedParameters = contract
     .deploy({
       data: byteCode,
-      arguments: ['Hello စာဝါဒီခ', from],
+      arguments: ['မင်္ဂလာပါ', from],
     })
     .encodeABI();
   console.log('Deploying...');
@@ -127,7 +151,7 @@ const deployGreetingSmartContract = async (pk) => {
     .on('receipt', receipt => {
       console.log(receipt);
     })
-    .catch(error, error => {
+    .catch(error => {
       console.log(error);
     });
   console.log('Contract Address:', txReceipt.contractAddress);
@@ -137,4 +161,9 @@ const deployGreetingSmartContract = async (pk) => {
 
 export {abi, byteCode};
 
-export {getDeployedContract, deployGreetingSmartContract, getGreeting, setGreeting};
+export {
+  getDeployedContract,
+  deployGreetingSmartContract,
+  getGreeting,
+  setGreeting,
+};
